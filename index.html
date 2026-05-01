@@ -1,27 +1,401 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <title>FPS Mobile</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin:0; overflow:hidden; background:black; }
-    canvas { display:block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cameraman War: Industrial Shadows</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #000; overflow: hidden; width: 100vw; height: 100vh; font-family: 'Segoe UI', Arial, sans-serif; }
+        canvas { display: block; background: #080c14; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+
+        /* --- UI GAME --- */
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        .top-ui-container {
+            position: absolute; top: 10px; left: 0; width: 100%;
+            display: flex; justify-content: space-between; padding: 0 15px;
+        }
+
+        .base-stats {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 8px 12px; border-radius: 10px;
+            border: 2px solid #ffd700; color: #fff;
+            min-width: 140px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .hp-bar-container {
+            width: 100%; height: 8px; background: #334155;
+            border-radius: 4px; margin-top: 4px; overflow: hidden;
+        }
+
+        .hp-fill { height: 100%; transition: width 0.3s ease; }
+        .hp-ally { background: #4ade80; }
+        .hp-enemy { background: #f87171; }
+
+        .bottom-ui { position: absolute; bottom: 15px; left: 15px; pointer-events: auto; }
+        .right-ui { position: absolute; bottom: 15px; right: 15px; pointer-events: auto; }
+
+        .btn-action {
+            width: 90px; height: 110px;
+            border: 3px solid #fff; border-radius: 12px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer; overflow: hidden; transition: transform 0.1s;
+        }
+        .btn-action:active { transform: scale(0.95); }
+
+        .btn-spawn { background: linear-gradient(145deg, #4ecca3, #45b38f); box-shadow: 0 4px 0 #2d7d63; }
+        .btn-upgrade { background: linear-gradient(145deg, #ffd700, #b8860b); box-shadow: 0 4px 0 #8b4513; }
+
+        .btn-action .icon { width: 50px; height: 50px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+        .btn-action .icon-text { font-size: 30px; }
+        .btn-action .label { font-size: 11px; font-weight: bold; color: #1b1b1b; }
+        .btn-action .price { font-size: 13px; color: #fff; background: #1b1b1b; width: 100%; text-align: center; padding: 1px 0; margin-top: 3px; }
+
+        #overlay-screen { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; }
+
+        /* --- MENU SYSTEM --- */
+        #main-menu, #level-select {
+            position: fixed; inset: 0; background: #080c14; z-index: 10001; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 10px; color: white; text-align: center; transition: opacity 0.5s ease-in-out, visibility 0.5s;
+        }
+
+        .campaign-title { font-size: 5vh; letter-spacing: 3px; margin-bottom: 2vh; color: #ffd700; }
+        .level-menu-container { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 95%; height: 55vh; gap: 20px; overflow-x: auto; padding: 10px; scrollbar-width: none; }
+        .level-menu-container::-webkit-scrollbar { display: none; }
+
+        .level-card { width: 45vh; height: 100%; max-height: 350px; background: #1e293b; border: 3px solid #ffd700; border-radius: 20px; cursor: pointer; flex-shrink: 0; overflow: hidden; position: relative; }
+        .level-card.locked { filter: grayscale(1) brightness(0.5); cursor: not-allowed; }
+        .level-card.locked::after { content: "🔒 TERKUNCI"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 10px; color: white; font-weight: bold; }
+
+        .card-img-1 { height: 65%; width: 100%; background-image: url('Campaign1.png'); background-size: cover; background-position: center; border-bottom: 2px solid #ffd700; }
+        .card-img-2 { height: 65%; width: 100%; background-image: url('Campaign2.png'); background-size: cover; background-position: center; border-bottom: 2px solid #4ade80; }
+
+        #briefing-side { width: 0; opacity: 0; overflow: hidden; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); text-align: left; }
+        .level-menu-container.active #briefing-side { width: auto; flex: 1; max-width: 450px; opacity: 1; margin-left: 20px; }
+
+        .briefing-box { padding: 3vh; background: #1e293b; border-radius: 20px; border: 1px solid #4ade80; }
+        .btn-game { padding: 10px 30px; background: #ffd700; color: #000; font-weight: bold; border-radius: 50px; border: none; cursor: pointer; margin-top: 2vh; }
+        
+        /* Tombol Delete Data */
+        .btn-delete { background: #ef4444; color: white; font-size: 12px; margin-top: 4vh; opacity: 0.7; padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; }
+        .btn-delete:hover { opacity: 1; }
+
+        .btn-battle { width: 100%; padding: 12px; background: #4ade80; color: #000; font-weight: bold; border-radius: 12px; border: none; cursor: pointer; margin-top: 10px; font-size: 16px; }
+
+        .hidden { display: none !important; }
+        .fade-out { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+    </style>
 </head>
 <body>
+    <div id="main-menu">
+        <h1 style="font-size: 8vh; color: #ffd700; text-shadow: 0 0 15px rgba(255,215,0,0.5);">CAMERAMAN WAR</h1>
+        <p style="color: #94a3b8; margin-bottom: 2vh;">Cinematic Battle Simulation</p>
+        <button class="btn-game" onclick="toLevelSelect()">PLAY</button>
+        <button class="btn-delete" onclick="deleteData()">DELETE DATA</button>
+    </div>
 
-<canvas id="game"></canvas>
+    <div id="level-select" class="hidden">
+        <h2 class="campaign-title">CAMPAIGN SELECTION</h2>
+        <div class="level-menu-container" id="menu-wrap">
+            <div class="level-card" onclick="openBriefing(1)">
+                <div class="card-img-1"></div> 
+                <div style="padding:1.5vh;">
+                    <h3 style="color:#ffd700; font-size: 2.8vh;">Campaign 1</h3>
+                    <p style="font-size:1.8vh; color:#94a3b8;">The First Invasion</p>
+                </div>
+            </div>
+
+            <div id="card-cp2" class="level-card" onclick="openBriefing(2)">
+                <div class="card-img-2"></div> 
+                <div style="padding:1.5vh;">
+                    <h3 style="color:#4ade80; font-size: 2.8vh;">Campaign 2</h3>
+                    <p style="font-size:1.8vh; color:#94a3b8;">Industrial Shadows</p>
+                </div>
+            </div>
+
+            <div id="briefing-side">
+                <div class="briefing-box">
+                    <h2 id="b-title" style="color:#4ade80; border-bottom: 1px solid #4ade80; padding-bottom: 5px; font-size: 2.5vh;">OPERASI: ...</h2>
+                    <p id="b-desc" style="margin: 1.5vh 0; line-height: 1.4; color: #cbd5e1; font-size: 2vh;"></p>
+                    <button class="btn-battle" onclick="finalStart()">BATTLE START</button>
+                    <button onclick="document.getElementById('menu-wrap').classList.remove('active')" style="background:none; border:none; color:#94a3b8; cursor:pointer; width:100%; margin-top:10px; font-size: 12px;">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <button class="btn-game" style="font-size: 11px; background: #334155; color: white;" onclick="location.reload()">BACK</button>
+    </div>
+
+    <div id="overlay-screen">
+        <h1 id="status-text">VICTORY</h1>
+        <button class="btn-game" style="margin-top: 20px;" onclick="location.reload()">MAIN LAGI</button>
+    </div>
+
+    <div id="ui" class="hidden">
+        <div class="top-ui-container">
+            <div class="base-stats">
+                <div style="color: #ffd700; font-weight: bold; font-size: 14px;">CASH: $<span id="money-txt">150</span></div>
+                <div id="eco-lvl-txt" style="font-size: 10px; color: #4ade80;">Worker Lv. 1</div>
+                <div class="hp-bar-container">
+                    <div id="hp-ally-fill" class="hp-fill hp-ally" style="width: 100%;"></div>
+                </div>
+            </div>
+            <div class="base-stats" style="border-color: #f87171; text-align: right;">
+                <div style="color: #f87171; font-weight: bold; font-size: 14px;">SKIBIDI BASE</div>
+                <div style="font-size: 10px;">ENEMY HP</div>
+                <div class="hp-bar-container">
+                    <div id="hp-enemy-fill" class="hp-fill hp-enemy" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-ui">
+            <div class="btn-action btn-spawn" onclick="spawnUnit()">
+                <div class="icon" style="background-image: url('Run1.png');"></div>
+                <div class="label">Cameraman</div>
+                <div class="price">$100</div>
+            </div>
+        </div>
+
+        <div class="right-ui">
+            <div class="btn-action btn-upgrade" onclick="upgradeEconomy()">
+                <div class="icon-text">💰</div>
+                <div class="label">Efficiency</div>
+                <div id="eco-price" class="price">$150</div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const moneyDisplay = document.getElementById('money-txt');
+    const overlay = document.getElementById('overlay-screen');
+    const statusText = document.getElementById('status-text');
+    const hpAllyFill = document.getElementById('hp-ally-fill');
+    const hpEnemyFill = document.getElementById('hp-enemy-fill');
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+    const bgm = new Audio('BGM.mp3');
+    bgm.loop = true;
+    bgm.volume = 0.5;
 
-ctx.fillStyle = "red";
-ctx.fillRect(100,100,80,80);
+    let cp2Unlocked = localStorage.getItem('cp2Unlocked') === 'true';
+
+    let game = {
+        active: false, money: 150, worldWidth: 4000, cameraX: 0, groundY: 0,
+        units: [], lastTime: 0, enemyTimer: 0, mediumSpawnTimer: 0, isDragging: false, lastMouseX: 0, gameOver: false,
+        currentCampaign: 1,
+        ecoLevel: 1,
+        maxEcoLevel: 8,
+        ecoCosts: [0, 150, 300, 550, 900, 1500, 2500, 4000],
+        ecoRates: [0, 0.05, 0.09, 0.15, 0.22, 0.35, 0.50, 0.75, 1.20],
+        base: {
+            ally: { hp: 1000, maxHp: 1000, x: 50 },
+            enemy: { hp: 1000, maxHp: 1000, x: 3850 }
+        }
+    };
+
+    const stories = {
+        1: { title: "OPERASI: KOTA MATI", desc: "Sinyal aneh terdeteksi dari pusat kota. Makhluk toilet muncul massal. Hancurkan markas musuh!" },
+        2: { title: "OPERASI: BAYANG-BAYANG MELUAS", desc: "Skibidi menyerang zona industri. Intelijen mendeteksi varian toilet yang lebih besar dan kuat!" }
+    };
+
+    // Fungsi Delete Data
+    function deleteData() {
+        if (confirm("Hapus semua progres permainan?")) {
+            localStorage.removeItem('cp2Unlocked');
+            location.reload();
+        }
+    }
+
+    function toLevelSelect() {
+        const mainMenu = document.getElementById('main-menu');
+        const levelSelect = document.getElementById('level-select');
+        const card2 = document.getElementById('card-cp2');
+        if (!cp2Unlocked) card2.classList.add('locked');
+        else card2.classList.remove('locked');
+        levelSelect.classList.remove('hidden');
+        mainMenu.classList.add('fade-out');
+        setTimeout(() => { mainMenu.classList.add('hidden'); }, 500);
+    }
+
+    function openBriefing(id) {
+        if (id === 2 && !cp2Unlocked) { alert("Selesaikan Campaign 1!"); return; }
+        game.currentCampaign = id;
+        document.getElementById('b-title').innerText = stories[id].title;
+        document.getElementById('b-desc').innerText = stories[id].desc;
+        document.getElementById('menu-wrap').classList.add('active');
+    }
+
+    function finalStart() {
+        document.getElementById('level-select').classList.add('fade-out');
+        setTimeout(() => {
+            document.getElementById('level-select').classList.add('hidden');
+            document.getElementById('ui').classList.remove('hidden');
+            game.active = true;
+            bgm.play().catch(()=>{});
+        }, 500);
+    }
+
+    function upgradeEconomy() {
+        if (game.ecoLevel < game.maxEcoLevel && game.money >= game.ecoCosts[game.ecoLevel]) {
+            game.money -= game.ecoCosts[game.ecoLevel];
+            game.ecoLevel++;
+            document.getElementById('eco-lvl-txt').innerText = "Worker Lv. " + game.ecoLevel;
+            document.getElementById('eco-price').innerText = (game.ecoLevel >= game.maxEcoLevel) ? "MAX" : "$" + game.ecoCosts[game.ecoLevel];
+        }
+    }
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        game.groundY = canvas.height * 0.85; 
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const sprites = { run: [], attack: [], enemyRun: [], enemyAttack: [] };
+    const ASSETS = {
+        run: ["Run1.png", "Run2.png", "Run3.png", "Run4.png"],
+        attack: ["Attack1.png", "Attack2.png", "Attack3.png", "Attack4.png"],
+        enemyRun: ["Run5.png"],
+        enemyAttack: ["Attack5.png", "Attack6.png", "Attack7.png", "Attack8.png"]
+    };
+
+    const baseImages = { ally: new Image(), enemy: new Image() };
+
+    function loadAssets() {
+        const load = (list, target) => list.forEach((src, i) => { const img = new Image(); img.src = src; target[i] = img; });
+        load(ASSETS.run, sprites.run); load(ASSETS.attack, sprites.attack);
+        load(ASSETS.enemyRun, sprites.enemyRun); load(ASSETS.enemyAttack, sprites.enemyAttack);
+        baseImages.ally.src = "TowerCameraman.png";
+        baseImages.enemy.src = "TowerSkibidi.png";
+    }
+
+    class Unit {
+        constructor(side, type = 'normal') {
+            this.side = side; this.type = type;
+            if (side === 'ally') {
+                this.width = 140; this.height = 160; this.hp = 100; this.maxHp = 100;
+                this.damage = 20; this.speed = 2.8; this.attackRange = 45; this.color = "#4ade80";
+            } else {
+                if (type === 'medium') {
+                    this.width = 165; this.height = 165; this.hp = 220; this.maxHp = 220;
+                    this.damage = 22; this.speed = -1.2; this.attackRange = 55; this.color = "#f87171";
+                } else {
+                    this.width = 120; this.height = 120; this.hp = 50; this.maxHp = 50;
+                    this.damage = 15; this.speed = -2.8; this.attackRange = 30; this.color = "#f87171";
+                }
+            }
+            this.x = (side === 'ally') ? game.base.ally.x : game.base.enemy.x - (this.width/2);
+            this.state = 'RUN'; this.frame = 0; this.frameTimer = 0; this.frameSpeed = 120; this.hasHit = false;
+        }
+        update(dt) {
+            if (game.gameOver) return;
+            const enemies = game.units.filter(u => u.side !== this.side);
+            let target = null;
+            let distToBase = (this.side === 'ally') ? game.base.enemy.x - (this.x + this.width * 0.7) : (this.x + this.width * 0.3) - game.base.ally.x;
+            if (distToBase < 15) target = "BASE";
+            else enemies.forEach(e => { if (Math.abs(this.x - e.x) < this.attackRange + 30) target = e; });
+            
+            if (target) { if (this.state !== 'ATTACK') { this.state = 'ATTACK'; this.frame = 0; this.hasHit = false; } } 
+            else this.state = 'RUN';
+            
+            this.frameTimer += dt;
+            if (this.frameTimer >= this.frameSpeed) {
+                let currentSprites = (this.side === 'ally') ? (this.state === 'RUN' ? sprites.run : sprites.attack) : (this.state === 'RUN' ? sprites.enemyRun : sprites.enemyAttack);
+                this.frame = (this.frame + 1) % (currentSprites.length || 1);
+                this.frameTimer = 0; if (this.frame === 0) this.hasHit = false;
+            }
+            if (this.state === 'RUN') this.x += this.speed; 
+            else if (this.frame === 2 && !this.hasHit) { 
+                if (target === "BASE") { if (this.side === 'ally') game.base.enemy.hp -= this.damage; else game.base.ally.hp -= this.damage; } 
+                else if (target && target.hp > 0) { target.hp -= this.damage; if (target.hp <= 0 && this.side === 'ally') game.money += 30; }
+                this.hasHit = true;
+            }
+        }
+        draw() {
+            if (this.x + this.width < game.cameraX || this.x > game.cameraX + canvas.width) return;
+            ctx.save();
+            ctx.translate(this.x - game.cameraX, game.groundY - this.height + 15);
+            if (this.side === 'enemy') { ctx.translate(this.width, 0); ctx.scale(-1, 1); }
+            const set = (this.side === 'ally') ? (this.state === 'RUN' ? sprites.run : sprites.attack) : (this.state === 'RUN' ? sprites.enemyRun : sprites.enemyAttack);
+            if (set[this.frame] && set[this.frame].complete) ctx.drawImage(set[this.frame], 0, 0, this.width, this.height);
+            ctx.restore();
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(this.x - game.cameraX + 25, game.groundY - this.height - 5, this.width - 50, 6);
+            ctx.fillStyle = this.color; ctx.fillRect(this.x - game.cameraX + 25, game.groundY - this.height - 5, (this.hp/this.maxHp)*(this.width-50), 6);
+        }
+    }
+
+    function drawParallax() {
+        ctx.fillStyle = "#fff";
+        for (let i = 0; i < 50; i++) {
+            let px = (i * 200 - (game.cameraX * 0.02)) % (game.worldWidth);
+            if (px < 0) px += game.worldWidth;
+            ctx.globalAlpha = 0.2; ctx.fillRect(px, 100 + (i % 5) * 50, 2, 2);
+        }
+        ctx.globalAlpha = 1.0;
+        if (game.currentCampaign === 1) {
+            ctx.fillStyle = "#0a0f1a"; for (let i = 0; i < game.worldWidth; i += 300) ctx.fillRect(i - (game.cameraX * 0.15), game.groundY - 500, 180, 500);
+            ctx.fillStyle = "#161e2e"; for (let i = 0; i < game.worldWidth; i += 400) ctx.fillRect(i - (game.cameraX * 0.3), game.groundY - 350, 220, 350);
+            ctx.fillStyle = "#1e293b"; for (let i = 0; i < game.worldWidth; i += 600) ctx.fillRect(i - (game.cameraX * 0.5), game.groundY - 250, 300, 250);
+        } else {
+            ctx.fillStyle = "#0d1117"; for (let i = 0; i < game.worldWidth; i += 800) {
+                let px = i - (game.cameraX * 0.1); ctx.beginPath(); ctx.moveTo(px, game.groundY);
+                ctx.bezierCurveTo(px+20, game.groundY-200, px+130, game.groundY-200, px+150, game.groundY); ctx.fill();
+            }
+            ctx.fillStyle = "#131720"; for (let i = 0; i < game.worldWidth; i += 700) ctx.fillRect(i - (game.cameraX * 0.45), game.groundY - 450, 20, 450);
+        }
+    }
+
+    function drawBases() {
+        const baseW = 300; const baseH = 300;
+        let ax = game.base.ally.x - game.cameraX; if (baseImages.ally.complete) ctx.drawImage(baseImages.ally, ax - (baseW/2), game.groundY - baseH, baseW, baseH);
+        let ex = game.base.enemy.x - game.cameraX; if (baseImages.enemy.complete) ctx.drawImage(baseImages.enemy, ex - (baseW/2), game.groundY - baseH, baseW, baseH);
+    }
+
+    function spawnUnit() { if (game.money >= 100 && !game.gameOver) { game.money -= 100; game.units.push(new Unit('ally')); } }
+
+    function handleInput() {
+        const start = (x) => { game.isDragging = true; game.lastMouseX = x; if (bgm.paused && game.active) bgm.play(); };
+        const move = (x) => { if (!game.isDragging) return; game.cameraX = Math.max(0, Math.min(game.cameraX - (x - game.lastMouseX), game.worldWidth - canvas.width)); game.lastMouseX = x; };
+        canvas.addEventListener('mousedown', e => start(e.clientX)); window.addEventListener('mousemove', e => move(e.clientX));
+        window.addEventListener('mouseup', () => game.isDragging = false);
+        canvas.addEventListener('touchstart', e => start(e.touches[0].clientX)); canvas.addEventListener('touchmove', e => move(e.touches[0].clientX));
+        window.addEventListener('touchend', () => game.isDragging = false);
+    }
+
+    function loop(time) {
+        const dt = time - game.lastTime; game.lastTime = time;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawParallax();
+        ctx.fillStyle = (game.currentCampaign === 1) ? "#1e293b" : "#131720"; ctx.fillRect(0, game.groundY, canvas.width, canvas.height - game.groundY);
+        if (game.active && !game.gameOver) {
+            game.money += game.ecoRates[game.ecoLevel];
+            moneyDisplay.innerText = Math.floor(game.money);
+            hpAllyFill.style.width = (game.base.ally.hp / 10) + "%"; hpEnemyFill.style.width = (game.base.enemy.hp / 10) + "%";
+            game.enemyTimer += dt; if (game.enemyTimer > 3500) { game.units.push(new Unit('enemy', 'normal')); game.enemyTimer = 0; }
+            if (game.currentCampaign === 2) { game.mediumSpawnTimer += dt; if (game.mediumSpawnTimer > 12000) { game.units.push(new Unit('enemy', 'medium')); game.mediumSpawnTimer = 0; } }
+            if (game.base.enemy.hp <= 0) endGame("VICTORY"); if (game.base.ally.hp <= 0) endGame("DEFEAT");
+        }
+        drawBases();
+        game.units = game.units.filter(u => u.hp > 0);
+        game.units.sort((a,b) => a.y - b.y);
+        game.units.forEach(u => { u.update(dt); u.draw(); });
+        requestAnimationFrame(loop);
+    }
+
+    function endGame(text) { 
+        game.gameOver = true; statusText.innerText = text; overlay.style.display = "flex"; bgm.pause(); 
+        if (text === "VICTORY" && game.currentCampaign === 1) { cp2Unlocked = true; localStorage.setItem('cp2Unlocked', 'true'); }
+    }
+
+    window.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); }, {once: true});
+    loadAssets(); handleInput(); requestAnimationFrame(loop);
 </script>
-
 </body>
 </html>
